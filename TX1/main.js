@@ -1,47 +1,53 @@
-//var theThingsAPI = require('thethingsio-api');  
-//
-//var KEY = 'voltage';
-//var interval = 500;//ms
-//
-////create Client
-//var client = theThingsAPI.createClient();
-//
-//
-////The object to write.
-//var object = {
-//    "values":
-//        [
-//            {
-//                "key": KEY,
-//                "value": "100",
-//                "units": "V",
-//                "type": "temporal"
-//            }
-//        ]
-//}
-////write the object
-//
-//setInterval(function() {
-//    object.values[0].value = Math.floor(Math.random()*100);
-//    var req3 = client.thingWrite(object);
-//    req3.on('response',function(res){
-//        console.log('Write\n',res.statusCode,res.payload.toString() ,'\n\n');
-//    });
-//    req3.end();
-//    console.log("send", object);
-//},interval);
+var theThingsAPI = require('thethingsio-api');  
 
-var mraa = require('mraa'); //require mraa
-console.log('MRAA Version: ' + mraa.getVersion()); //write the mraa version to the console
+//create Client
+var client = theThingsAPI.createClient();
 
-var myDigitalPin6 = new mraa.Gpio(2); //setup digital read on Digital pin #6 (D6)
-myDigitalPin6.dir(mraa.DIR_IN); //set the gpio direction to input
+var mraa = require('mraa');
 
-periodicActivity(); //call the periodicActivity function
+var button = new mraa.Gpio(2),
+    rotationSensorPin = new mraa.Aio(0),
+    lastRotation = 500;
 
-function periodicActivity() //
-{
-  var myDigitalValue =  myDigitalPin6.read(); //read the digital value of the pin
-  console.log('Gpio is ' + myDigitalValue); //write the read value out to the console
-  setTimeout(periodicActivity,400); //call the indicated function after 1 second (1000 milliseconds)
+button.dir(mraa.DIR_IN);
+
+
+main();
+
+function main() {
+    
+    var pressed =  button.read(); 
+    console.log('Pressed: ' + pressed);
+    
+    var rotationAngle = rotationSensorPin.read();
+    console.log('Rotation: ' + rotationAngle);
+    
+    var req3 = client.thingWrite({  
+        "values":
+            [
+                {
+                    "key": "motion",
+                    "value": (pressed === 1) ? "go" : "stop",
+                    "units": "",
+                    "type": "temporal"
+                },
+                {
+                    "key": "turn",
+                    "value" : rotation(rotationAngle),
+                    "units": "",
+                    "type": "temporal"
+                }
+            ]
+    });
+    req3.on('response',function(res){
+        lastRotation = rotationAngle;
+    });
+    req3.end();
+    
+  setTimeout(main,400);
+}
+
+function rotation(rotationAngle) {
+    if (rotationAngle)
+    return "straight";
 }
