@@ -7,7 +7,7 @@ var mraa = require('mraa');
 
 var button = new mraa.Gpio(2),
     rotationSensorPin = new mraa.Aio(0),
-    lastRotation = 500;
+    lastRotation = 500; // center
 
 button.dir(mraa.DIR_IN);
 
@@ -48,6 +48,10 @@ function main() {
 }
 
 function rotation(rotationAngle) {
-    if (rotationAngle)
-    return "straight";
+    if (350 < rotationAngle && rotationAngle < 650)
+        return "straight";
+    else if (rotationAngle > 650)
+        return "left";
+    
+    return "right";
 }
