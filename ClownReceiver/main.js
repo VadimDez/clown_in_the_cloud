@@ -1,35 +1,32 @@
 var theThingsAPI = require('thethingsio-api');
+var motion = require('./motion');
 
 console.log("Hello");
 
 
-var KEY = 'motion';
-var interval = 500;//ms
+var motionKEY = 'motion';
 
 //create Client
 var client = theThingsAPI.createClient();
 
 
-//The object to write.
-var object = {
-    "values":
-        [
-            {
-                "key": KEY,
-                "value": "100",
-                "units": "V",
-                "type": "temporal"
-            }
-        ]
-}
-//write the object
+function readMotions()
+{
+    //read latest write
+    var req1 = client.thingReadLatest(motionKEY);
 
-setInterval(function(){
-  object.values[0].value = Math.floor(Math.random()*100);
-  var req3 = client.thingWrite(object);
-  req3.on('response',function(res){
-      console.log('Write\n',res.statusCode,res.payload.toString() ,'\n\n');
-  });
-  req3.end();
-  console.log("send",object);
-},interval);
+    //event fired when the response arrives
+    req1.on('response',function(res){
+        console.log('Read Latest\n',res.statusCode, res.payload.toString(),'\n\n');
+        if (res.statusCode == 200 && res.payload !== undefined)
+        {
+            var payload = JSON.parse(res.payload);
+            motion.doAction(payload.data[0].value);
+        }
+    });
+    req1.end();
+}
+
+motion.doAction("stop");
+
+setInterval(readMotions, 1000);
