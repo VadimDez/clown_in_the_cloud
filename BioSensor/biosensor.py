@@ -1,11 +1,16 @@
-
 from wyliodrin import *
 import json, datetime
 import paho.mqtt.client as mqtt
-from sys import stdin
-import sys
+from numpy.fft import rfft, fftfreq
+from numpy import zeros,abs
+from numpy import hanning
 
-THING_TOKEN = u"cdbac4cc05fab52d4b607547a185e8604b43c6ee72f2a5911ecb1b7445b47a76"
+sampling_delay_ms = 5 # ms
+sampling_rate  =  200 # Hz
+fftdim = 200
+twopi = 6.28318530
+
+THING_TOKEN = u"9da4531dedd6ebdd4198b71c2fbe08415e5a3214a1e4193303db8f7c5e00c59c"
 USER_TOKEN = u"06118234d92b7437749a576b9de5da6fd06fb7d664378c2f016f0a41e5d8a3b2"
 thingsIOdict =  {u"values" : None } #{u"thing" : {u"id" : thingToken }, u"user" : {u"id" : userToken}, u"values" : None}
 
@@ -26,21 +31,10 @@ def on_message(client, userdata, msg):
 	# print(msg.topic+" "+str(msg.payload))
 	return None
 
-LED_PIN = 8
-PD_PIN = 0
+LED_PIN = 8 # enter the pin number where you connected the LED
+PD_PIN = 0 # enter the pin number where  you connected the LDR Sensor.
 
 def main():
-
-  def read_pin_and_avg(pin, times):
-    '''Read sensor values times times and return the average reading.
-    '''
-    tmpList = []
-    for ii in range(times):
-      tmpList.append(analogRead(PD_PIN))
-    avg  = sum(tmpList) / float(len(tmpList))
-    return avg
-
-
   #Set client ID
   client = mqtt.Client(USER_TOKEN + '|' + THING_TOKEN)
   client.on_connect = on_connect
@@ -51,30 +45,34 @@ def main():
   client.connect("mqtt.thethings.io", 1883, 60)
   client.loop_start()
   
-  #print ("Led on pin %s should blink" % LED_PIN)
   # Setup the pin in output mode (value 1), so that we can write a value on it
   pinMode (LED_PIN, 1)
-  # init our sensors.
-  PD_Value = 0 
-  PD_Background = 0
-  # print ("Press the Stop button to stop")
-  # Loop forever until, we press stop
+  digitalWrite (LED_PIN, 1)
+
+
+  # init an array to hold the LDR sensor readings.
+  data = zeros(sampling_rate)
+  # Loop forever
   while True:
     thingsIOdict.pop("values",None)
-    digitalWrite (LED_PIN, 0)    
-    delay(100)
-    PD_Background = read_pin_and_avg(PD_PIN,5)
-    # now start the LED
-    digitalWrite (LED_PIN, 1)
-    delay(500)
-    # and substract the background
-    PD_Value = read_pin_and_avg(PD_PIN,5) - PD_Background
-    sendSignal ('signal3',PD_Value)
-    # datetime 
+    for ii in range(sampling_rate):
+      data[ii] = analogRead(PD_PIN) # read the analog LDR pin and put th value to the data array.
+      delay(sampling_delay_ms)
+    wham = hanning(sampling_rate)   # create a filter window with the correct size for our buffer length.
+    fft_data = rfft(data * wham)    # compute the real fourier transform of the data times the window function.
+    f = fftfreq(fftdim)             # generate the frequels
+    #remove dc component and other slow frequency components of the spectrum.
+    fft_data[0:3] = 0
+    tmp_data = abs(fft_data)        
+    heartbeat_frequency_index=  tmp_data.argmax()   # get the index of the frequency with the highest contribution to the spectra.
+    heart_beat = heartbeat_frequency_index * sampling_rate / (fftdim/2 +1) /2  # convert the index to a physical frequency
+    # sendSignal ('signal3',int(heart_beat)) # write the signal to wyliodrin plotter
+    # create a timestamp for our datapoint. 
     dtime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    thingsIOdict[u"values"] = [{u"key" : "biosensor", u"value" : PD_Value, u"unit" : "au", u"type" : "", u"datetime" : dtime}]
+    thingsIOdict[u"values"] = [{u"key" : "biosensor", u"value" : int(heart_beat), u"unit" : u"Hz", u"type" : u"Frequency", u"datetime" : dtime}]
     userinput =  json.dumps(thingsIOdict)
     client.publish(TOPIC, payload=userinput)
+    delay(1000) # read the heartbeat every 1000ms = 1s.
 
 if __name__ == "__main__":
   main()
